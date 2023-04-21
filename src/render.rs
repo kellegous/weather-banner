@@ -1,6 +1,9 @@
+use super::gsod;
 use super::Data;
 use chrono::prelude::*;
+use flate2::read::GzDecoder;
 use std::error::Error;
+use tar::Archive;
 
 #[derive(clap::Args, Debug)]
 pub struct Args {
@@ -18,7 +21,11 @@ pub struct Args {
 }
 
 pub fn execute(data: &Data, args: &Args) -> Result<(), Box<dyn Error>> {
-    println!("{:#?}", args);
-    println!("{:#?}", data);
+    let src = data.download_and_open(&gsod::url_for(args.year), format!("{}.tar.gz", args.year))?;
+    let mut r = Archive::new(GzDecoder::new(src));
+    for entry in r.entries()? {
+        let station = gsod::Station::from_entry(&mut entry?)?;
+        println!("id = {}", station.id());
+    }
     Ok(())
 }
