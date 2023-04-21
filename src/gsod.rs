@@ -80,6 +80,10 @@ pub struct Day {
     mean_wind: Option<MeanWindSpeed>,
     max_sustained_wind: Option<WindSpeed>,
     max_wind_gust: Option<WindSpeed>,
+    max_temperature: Option<TemperatureExtremity>,
+    min_temperature: Option<TemperatureExtremity>,
+    precipitation: Option<Precipitation>,
+    snow_depth: Option<SnowDepth>,
 }
 
 impl Day {
@@ -97,6 +101,12 @@ impl Day {
         let mean_wind = MeanWindSpeed::from_gsod(from_record(rec, 16)?, from_record(rec, 17)?)?;
         let max_sustained_wind = WindSpeed::from_gsod(from_record(rec, 18)?)?;
         let max_wind_gust = WindSpeed::from_gsod(from_record(rec, 19)?)?;
+        let max_temperature =
+            TemperatureExtremity::from_gsod(from_record(rec, 20)?, from_record(rec, 21)?)?;
+        let min_temperature =
+            TemperatureExtremity::from_gsod(from_record(rec, 22)?, from_record(rec, 23)?)?;
+        let precipitation = Precipitation::from_gsod(from_record(rec, 24)?, from_record(rec, 25)?)?;
+        let snow_depth = SnowDepth::from_gsod(from_record(rec, 26)?)?;
         Ok(Self {
             day,
             mean_temperature,
@@ -107,7 +117,132 @@ impl Day {
             mean_wind,
             max_sustained_wind,
             max_wind_gust,
+            max_temperature,
+            min_temperature,
+            precipitation,
+            snow_depth,
         })
+    }
+}
+
+#[derive(Debug)]
+pub enum PrecipitationAttr {
+    SingleOf6HourAmount,
+    SummationOf2ReportsOf6HourAmount,
+    SummationOf3ReportsOf6HourAmount,
+    SummationOf4ReportsOf6HourAmount,
+    SingleReportOf12HourAmount,
+    SummationOf2ReportsOf12HourAmount,
+    SingleReportOf24HourAmount,
+    ZeroDespiteHourlyObservations,
+    NoReport,
+}
+
+impl PrecipitationAttr {
+    fn from_gsod(s: &str) -> Result<Option<PrecipitationAttr>, Box<dyn Error>> {
+        match s.trim() {
+            "" => Ok(None),
+            "A" => Ok(Some(PrecipitationAttr::SingleOf6HourAmount)),
+            "B" => Ok(Some(PrecipitationAttr::SummationOf2ReportsOf6HourAmount)),
+            "C" => Ok(Some(PrecipitationAttr::SummationOf3ReportsOf6HourAmount)),
+            "D" => Ok(Some(PrecipitationAttr::SummationOf4ReportsOf6HourAmount)),
+            "E" => Ok(Some(PrecipitationAttr::SingleReportOf12HourAmount)),
+            "F" => Ok(Some(PrecipitationAttr::SummationOf2ReportsOf12HourAmount)),
+            "G" => Ok(Some(PrecipitationAttr::SingleReportOf24HourAmount)),
+            "H" => Ok(Some(PrecipitationAttr::ZeroDespiteHourlyObservations)),
+            "I" => Ok(Some(PrecipitationAttr::NoReport)),
+            s => Err(format!("invalid precipitation attr: {}", s).into()),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Precipitation {
+    p: f64,
+    attr: Option<PrecipitationAttr>,
+}
+
+impl Precipitation {
+    fn from_gsod(p: &str, a: &str) -> Result<Option<Precipitation>, Box<dyn Error>> {
+        let p = match p.trim() {
+            "99.99" => return Ok(None),
+            p => p.parse::<f64>()?,
+        };
+
+        Ok(Some(Precipitation {
+            p,
+            attr: PrecipitationAttr::from_gsod(a)?,
+        }))
+    }
+
+    pub fn in_inches(&self) -> f64 {
+        self.p
+    }
+}
+
+#[derive(Debug)]
+pub struct SnowDepth {
+    d: f64,
+}
+
+impl SnowDepth {
+    fn from_gsod(d: &str) -> Result<Option<SnowDepth>, Box<dyn Error>> {
+        match d.trim() {
+            "999.9" => Ok(None),
+            d => Ok(Some(SnowDepth {
+                d: d.parse::<f64>()?,
+            })),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum DeterminedVia {
+    ExplicitReading,
+    DerivedFromHourly,
+}
+
+impl DeterminedVia {
+    fn from_gsod(s: &str) -> Result<DeterminedVia, Box<dyn Error>> {
+        match s.trim() {
+            "*" => Ok(DeterminedVia::DerivedFromHourly),
+            "" => Ok(DeterminedVia::ExplicitReading),
+            _ => Err(format!("invalid DeterminedVia: {}", s).into()),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct TemperatureExtremity {
+    t: Temperature,
+    d: DeterminedVia,
+}
+
+impl TemperatureExtremity {
+    fn new(t: Temperature, d: DeterminedVia) -> TemperatureExtremity {
+        TemperatureExtremity { t, d }
+    }
+
+    fn from_gsod(t: &str, d: &str) -> Result<Option<TemperatureExtremity>, Box<dyn Error>> {
+        match Temperature::from_gsod(t)? {
+            Some(t) => Ok(Some(TemperatureExtremity::new(
+                t,
+                DeterminedVia::from_gsod(d)?,
+            ))),
+            None => Ok(None),
+        }
+    }
+
+    pub fn temperature(&self) -> Temperature {
+        self.t
+    }
+
+    pub fn in_fahrenheit(&self) -> f64 {
+        self.t.in_fahrenheit()
+    }
+
+    pub fn in_celsius(&self) -> f64 {
+        self.t.in_celsius()
     }
 }
 
