@@ -79,9 +79,18 @@ pub struct Day {
 impl Day {
     fn from_record(rec: &StringRecord) -> Result<Day, Box<dyn Error>> {
         let day = chrono::NaiveDate::parse_from_str(from_record(rec, 1)?, "%Y-%m-%d")?;
+        let mean_temperature = if let Some(t) = Temperature::from_gsod(from_record(rec, 6)?)? {
+            Some(MeanTemperature::new(
+                t,
+                from_record(rec, 7)?.trim().parse::<i32>()?,
+            ))
+        } else {
+            None
+        };
+
         Ok(Self {
             day,
-            mean_temperature: None,
+            mean_temperature,
             mean_dewpoint: None,
         })
     }
