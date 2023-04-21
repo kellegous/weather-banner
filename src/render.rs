@@ -25,7 +25,8 @@ pub fn execute(data: &Data, args: &Args) -> Result<(), Box<dyn Error>> {
     let mut r = Archive::new(GzDecoder::new(src));
     for entry in r.entries()? {
         let station = gsod::Station::from_entry(&mut entry?)?;
-        println!("{:?}", station);
+        println!("{}", station.id());
+        // println!("{:?}", station);
     }
     Ok(())
 }

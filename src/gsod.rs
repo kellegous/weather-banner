@@ -74,25 +74,167 @@ pub struct Day {
     day: chrono::NaiveDate,
     mean_temperature: Option<MeanTemperature>,
     mean_dewpoint: Option<MeanTemperature>,
+    mean_sea_level_pressure: Option<MeanPressure>,
+    mean_station_pressure: Option<MeanPressure>,
+    mean_visibility: Option<MeanDistance>,
+    mean_wind: Option<MeanWindSpeed>,
+    max_sustained_wind: Option<WindSpeed>,
+    max_wind_gust: Option<WindSpeed>,
 }
 
 impl Day {
     fn from_record(rec: &StringRecord) -> Result<Day, Box<dyn Error>> {
         let day = chrono::NaiveDate::parse_from_str(from_record(rec, 1)?, "%Y-%m-%d")?;
-        let mean_temperature = if let Some(t) = Temperature::from_gsod(from_record(rec, 6)?)? {
-            Some(MeanTemperature::new(
-                t,
-                from_record(rec, 7)?.trim().parse::<i32>()?,
-            ))
-        } else {
-            None
-        };
-
+        let mean_temperature =
+            MeanTemperature::from_gsod(from_record(rec, 6)?, from_record(rec, 7)?)?;
+        let mean_dewpoint = MeanTemperature::from_gsod(from_record(rec, 8)?, from_record(rec, 9)?)?;
+        let mean_sea_level_pressure =
+            MeanPressure::from_gsod(from_record(rec, 10)?, from_record(rec, 11)?)?;
+        let mean_station_pressure =
+            MeanPressure::from_gsod(from_record(rec, 12)?, from_record(rec, 13)?)?;
+        let mean_visibility =
+            MeanDistance::from_gsod(from_record(rec, 14)?, from_record(rec, 15)?)?;
+        let mean_wind = MeanWindSpeed::from_gsod(from_record(rec, 16)?, from_record(rec, 17)?)?;
+        let max_sustained_wind = WindSpeed::from_gsod(from_record(rec, 18)?)?;
+        let max_wind_gust = WindSpeed::from_gsod(from_record(rec, 19)?)?;
         Ok(Self {
             day,
             mean_temperature,
-            mean_dewpoint: None,
+            mean_dewpoint,
+            mean_sea_level_pressure,
+            mean_station_pressure,
+            mean_visibility,
+            mean_wind,
+            max_sustained_wind,
+            max_wind_gust,
         })
+    }
+}
+
+#[derive(Debug)]
+pub struct MeanWindSpeed {
+    s: WindSpeed,
+    n: i32,
+}
+
+impl MeanWindSpeed {
+    fn new(s: WindSpeed, n: i32) -> MeanWindSpeed {
+        MeanWindSpeed { s, n }
+    }
+
+    fn from_gsod(s: &str, n: &str) -> Result<Option<MeanWindSpeed>, Box<dyn Error>> {
+        match WindSpeed::from_gsod(s)? {
+            Some(s) => Ok(Some(MeanWindSpeed::new(s, n.trim().parse::<i32>()?))),
+            None => Ok(None),
+        }
+    }
+
+    pub fn in_knots(&self) -> f64 {
+        self.s.in_knots()
+    }
+}
+
+#[derive(Debug)]
+pub struct WindSpeed {
+    s: f64,
+}
+
+impl WindSpeed {
+    fn from_knots(s: f64) -> WindSpeed {
+        WindSpeed { s }
+    }
+
+    pub fn in_knots(&self) -> f64 {
+        self.s
+    }
+
+    fn from_gsod(s: &str) -> Result<Option<WindSpeed>, Box<dyn Error>> {
+        match s.trim() {
+            "999.9" => Ok(None),
+            s => Ok(Some(WindSpeed::from_knots(s.parse::<f64>()?))),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct MeanDistance {
+    d: Distance,
+    n: i32,
+}
+
+impl MeanDistance {
+    fn new(d: Distance, n: i32) -> MeanDistance {
+        MeanDistance { d, n }
+    }
+
+    fn from_gsod(d: &str, n: &str) -> Result<Option<MeanDistance>, Box<dyn Error>> {
+        match Distance::from_gsod(d)? {
+            Some(d) => Ok(Some(MeanDistance::new(d, n.trim().parse::<i32>()?))),
+            None => Ok(None),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Distance {
+    m: f64,
+}
+
+impl Distance {
+    fn from_miles(m: f64) -> Distance {
+        Distance { m }
+    }
+
+    pub fn in_miles(&self) -> f64 {
+        self.m
+    }
+
+    fn from_gsod(d: &str) -> Result<Option<Distance>, Box<dyn Error>> {
+        match d.trim() {
+            "999.9" => Ok(None),
+            s => Ok(Some(Distance::from_miles(s.parse::<f64>()?))),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct Pressure {
+    p: f64,
+}
+
+impl Pressure {
+    fn from_millibars(p: f64) -> Self {
+        Self { p }
+    }
+
+    pub fn in_millibars(&self) -> f64 {
+        self.p
+    }
+
+    fn from_gsod(s: &str) -> Result<Option<Pressure>, Box<dyn Error>> {
+        match s.trim() {
+            "9999.9" => Ok(None),
+            s => Ok(Some(Pressure::from_millibars(s.parse::<f64>()?))),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct MeanPressure {
+    p: Pressure,
+    n: i32,
+}
+
+impl MeanPressure {
+    fn new(p: Pressure, n: i32) -> Self {
+        Self { p, n }
+    }
+
+    fn from_gsod(p: &str, n: &str) -> Result<Option<MeanPressure>, Box<dyn Error>> {
+        match Pressure::from_gsod(p)? {
+            Some(p) => Ok(Some(MeanPressure::new(p, n.trim().parse::<i32>()?))),
+            None => Ok(None),
+        }
     }
 }
 
@@ -147,6 +289,14 @@ impl MeanTemperature {
 
     pub fn temperature(&self) -> Temperature {
         self.t
+    }
+
+    fn from_gsod(t: &str, n: &str) -> Result<Option<MeanTemperature>, Box<dyn Error>> {
+        if let Some(t) = Temperature::from_gsod(t)? {
+            Ok(Some(MeanTemperature::new(t, n.trim().parse::<i32>()?)))
+        } else {
+            Ok(None)
+        }
     }
 }
 
