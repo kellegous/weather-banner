@@ -1,10 +1,14 @@
 use std::error::Error;
 use std::io;
 
+use csv::StringRecord;
+
+#[derive(Debug)]
 pub struct Station {
     id: String,
-    loc: Option<Location>,
     name: Option<String>,
+    loc: Option<Location>,
+    elevation: Option<Elevation>,
     days: Vec<Day>,
 }
 
@@ -17,17 +21,26 @@ impl Station {
 
         if let Some(record) = iter.next() {
             let record = record?;
-            let id = record.get(0).ok_or("missing id")?.to_owned();
+            let id = from_record(&record, 0)?.to_owned();
+            let loc = parse_location(from_record(&record, 2)?, from_record(&record, 3)?)?;
+            let name = from_record(&record, 5)?;
+            let name = if name.is_empty() {
+                None
+            } else {
+                Some(name.to_owned())
+            };
+            let elevation = Elevation::from_gsod(from_record(&record, 4)?)?;
 
             return Ok(Self {
                 id,
-                loc: None,
-                name: None,
+                name,
+                loc,
+                elevation,
                 days: Vec::new(),
             });
         }
 
-        return Err("empty entry".into());
+        Err("empty entry".into())
     }
 
     pub fn id(&self) -> &str {
@@ -35,10 +48,50 @@ impl Station {
     }
 }
 
+fn from_record(rec: &StringRecord, ix: usize) -> Result<&str, Box<dyn Error>> {
+    rec.get(ix)
+        .ok_or_else(|| format!("missing field {}", ix).into())
+}
+
+fn parse_location(lat: &str, lng: &str) -> Result<Option<Location>, Box<dyn Error>> {
+    if lat.is_empty() || lng.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(Location::new(
+        lat.parse::<f64>()?,
+        lng.parse::<f64>()?,
+    )))
+}
+
+#[derive(Debug)]
 pub struct Day {
     day: chrono::NaiveDate,
 }
 
+#[derive(Debug)]
+pub struct Elevation {
+    m: f64,
+}
+
+impl Elevation {
+    fn new(m: f64) -> Self {
+        Self { m }
+    }
+
+    pub fn in_meters(&self) -> f64 {
+        self.m
+    }
+
+    fn from_gsod(s: &str) -> Result<Option<Self>, Box<dyn Error>> {
+        match s.trim() {
+            "" => Ok(None),
+            m => Ok(Some(Self::new(m.parse::<f64>()?))),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Location {
     lat: f64,
     lng: f64,
