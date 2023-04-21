@@ -18,7 +18,7 @@ impl Station {
             .has_headers(true)
             .from_reader(entry);
         let mut iter = r.records();
-
+        let mut days = Vec::new();
         if let Some(record) = iter.next() {
             let record = record?;
             let id = from_record(&record, 0)?.to_owned();
@@ -31,12 +31,17 @@ impl Station {
             };
             let elevation = Elevation::from_gsod(from_record(&record, 4)?)?;
 
+            days.push(Day::from_record(&record)?);
+            for record in iter {
+                days.push(Day::from_record(&record?)?);
+            }
+
             return Ok(Self {
                 id,
                 name,
                 loc,
                 elevation,
-                days: Vec::new(),
+                days,
             });
         }
 
@@ -67,6 +72,73 @@ fn parse_location(lat: &str, lng: &str) -> Result<Option<Location>, Box<dyn Erro
 #[derive(Debug)]
 pub struct Day {
     day: chrono::NaiveDate,
+    mean_temperature: Option<MeanTemperature>,
+    mean_dewpoint: Option<MeanTemperature>,
+}
+
+impl Day {
+    fn from_record(rec: &StringRecord) -> Result<Day, Box<dyn Error>> {
+        let day = chrono::NaiveDate::parse_from_str(from_record(rec, 1)?, "%Y-%m-%d")?;
+        Ok(Self {
+            day,
+            mean_temperature: None,
+            mean_dewpoint: None,
+        })
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct Temperature {
+    f: f64,
+}
+
+impl Temperature {
+    fn from_fahrenheit(f: f64) -> Self {
+        Self { f }
+    }
+
+    pub fn in_fahrenheit(&self) -> f64 {
+        self.f
+    }
+
+    pub fn in_celsius(&self) -> f64 {
+        (self.f - 32.0) * 5.0 / 9.0
+    }
+
+    fn from_gsod(s: &str) -> Result<Option<Self>, Box<dyn Error>> {
+        match s.trim() {
+            "9999.9" => Ok(None),
+            s => Ok(Some(Temperature::from_fahrenheit(s.parse::<f64>()?))),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct MeanTemperature {
+    t: Temperature,
+    n: i32,
+}
+
+impl MeanTemperature {
+    fn new(t: Temperature, n: i32) -> Self {
+        Self { t, n }
+    }
+
+    pub fn in_fahrenheit(&self) -> f64 {
+        self.t.in_fahrenheit() / self.n as f64
+    }
+
+    pub fn in_celsius(&self) -> f64 {
+        self.t.in_celsius() / self.n as f64
+    }
+
+    pub fn samples(&self) -> i32 {
+        self.n
+    }
+
+    pub fn temperature(&self) -> Temperature {
+        self.t
+    }
 }
 
 #[derive(Debug)]
