@@ -201,7 +201,7 @@ impl PrecipitationAttr {
         }
     }
 
-    fn to_char(&self) -> char {
+    fn to_char(self) -> char {
         match self {
             PrecipitationAttr::SingleOf6HourAmount => 'A',
             PrecipitationAttr::SummationOf2ReportsOf6HourAmount => 'B',

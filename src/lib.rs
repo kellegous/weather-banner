@@ -310,7 +310,7 @@ impl Scale {
     }
 
     pub fn from_range_with_step(r: &Range, step: f64) -> Scale {
-        let mut min = (r.min() / step as f64).floor() * step + step;
+        let mut min = (r.min() / step).floor() * step + step;
         let max = r.max();
         let mut steps = Vec::new();
         while min < max {
