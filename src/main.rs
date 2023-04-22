@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use std::error::Error;
-use weather_banner::{render, Data};
+use weather_banner::{list_stations, render, Data};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -14,12 +14,14 @@ struct Args {
 #[derive(Subcommand, Debug)]
 enum Command {
     Render(render::Args),
+    ListStations(list_stations::Args),
 }
 
 impl Command {
     fn execute(&self, data: &Data) -> Result<(), Box<dyn Error>> {
         match self {
             Command::Render(args) => render::execute(data, args),
+            Command::ListStations(args) => list_stations::execute(data, args),
         }
     }
 }

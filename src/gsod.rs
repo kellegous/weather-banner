@@ -2,8 +2,10 @@ use std::error::Error;
 use std::io;
 
 use csv::StringRecord;
+use serde::ser::SerializeTuple;
+use serde::Serialize;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Station {
     id: String,
     name: Option<String>,
@@ -69,7 +71,7 @@ fn parse_location(lat: &str, lng: &str) -> Result<Option<Location>, Box<dyn Erro
     )))
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Day {
     day: chrono::NaiveDate,
     mean_temperature: Option<MeanTemperature>,
@@ -125,7 +127,7 @@ impl Day {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum PrecipitationAttr {
     SingleOf6HourAmount,
     SummationOf2ReportsOf6HourAmount,
@@ -154,6 +156,29 @@ impl PrecipitationAttr {
             s => Err(format!("invalid precipitation attr: {}", s).into()),
         }
     }
+
+    fn to_char(&self) -> char {
+        match self {
+            PrecipitationAttr::SingleOf6HourAmount => 'A',
+            PrecipitationAttr::SummationOf2ReportsOf6HourAmount => 'B',
+            PrecipitationAttr::SummationOf3ReportsOf6HourAmount => 'C',
+            PrecipitationAttr::SummationOf4ReportsOf6HourAmount => 'D',
+            PrecipitationAttr::SingleReportOf12HourAmount => 'E',
+            PrecipitationAttr::SummationOf2ReportsOf12HourAmount => 'F',
+            PrecipitationAttr::SingleReportOf24HourAmount => 'G',
+            PrecipitationAttr::ZeroDespiteHourlyObservations => 'H',
+            PrecipitationAttr::NoReport => 'I',
+        }
+    }
+}
+
+impl serde::ser::Serialize for PrecipitationAttr {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        s.serialize_char(self.to_char())
+    }
 }
 
 #[derive(Debug)]
@@ -178,6 +203,22 @@ impl Precipitation {
     pub fn in_inches(&self) -> f64 {
         self.p
     }
+
+    pub fn attr(&self) -> Option<PrecipitationAttr> {
+        self.attr
+    }
+}
+
+impl serde::ser::Serialize for Precipitation {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut s = s.serialize_tuple(2)?;
+        s.serialize_element(&self.p)?;
+        s.serialize_element(&self.attr)?;
+        s.end()
+    }
 }
 
 #[derive(Debug)]
@@ -194,6 +235,19 @@ impl SnowDepth {
             })),
         }
     }
+
+    pub fn in_inches(&self) -> f64 {
+        self.d
+    }
+}
+
+impl serde::ser::Serialize for SnowDepth {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        s.serialize_f64(self.d)
+    }
 }
 
 #[derive(Debug)]
@@ -209,6 +263,22 @@ impl DeterminedVia {
             "" => Ok(DeterminedVia::ExplicitReading),
             _ => Err(format!("invalid DeterminedVia: {}", s).into()),
         }
+    }
+
+    fn to_str(&self) -> &'static str {
+        match self {
+            DeterminedVia::ExplicitReading => "",
+            DeterminedVia::DerivedFromHourly => "*",
+        }
+    }
+}
+
+impl serde::ser::Serialize for DeterminedVia {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        s.serialize_str(self.to_str())
     }
 }
 
@@ -246,6 +316,18 @@ impl TemperatureExtremity {
     }
 }
 
+impl serde::ser::Serialize for TemperatureExtremity {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut s = s.serialize_tuple(2)?;
+        s.serialize_element(&self.t)?;
+        s.serialize_element(&self.d)?;
+        s.end()
+    }
+}
+
 #[derive(Debug)]
 pub struct MeanWindSpeed {
     s: WindSpeed,
@@ -266,6 +348,18 @@ impl MeanWindSpeed {
 
     pub fn in_knots(&self) -> f64 {
         self.s.in_knots()
+    }
+}
+
+impl serde::ser::Serialize for MeanWindSpeed {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut s = s.serialize_tuple(2)?;
+        s.serialize_element(&self.s)?;
+        s.serialize_element(&self.n)?;
+        s.end()
     }
 }
 
@@ -291,6 +385,15 @@ impl WindSpeed {
     }
 }
 
+impl serde::ser::Serialize for WindSpeed {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        s.serialize_f64(self.s)
+    }
+}
+
 #[derive(Debug)]
 pub struct MeanDistance {
     d: Distance,
@@ -307,6 +410,18 @@ impl MeanDistance {
             Some(d) => Ok(Some(MeanDistance::new(d, n.trim().parse::<i32>()?))),
             None => Ok(None),
         }
+    }
+}
+
+impl serde::ser::Serialize for MeanDistance {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut s = s.serialize_tuple(2)?;
+        s.serialize_element(&self.d)?;
+        s.serialize_element(&self.n)?;
+        s.end()
     }
 }
 
@@ -332,6 +447,15 @@ impl Distance {
     }
 }
 
+impl serde::ser::Serialize for Distance {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        s.serialize_f64(self.m)
+    }
+}
+
 #[derive(Debug, Copy, Clone)]
 pub struct Pressure {
     p: f64,
@@ -354,6 +478,15 @@ impl Pressure {
     }
 }
 
+impl serde::ser::Serialize for Pressure {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        s.serialize_f64(self.p)
+    }
+}
+
 #[derive(Debug)]
 pub struct MeanPressure {
     p: Pressure,
@@ -370,6 +503,18 @@ impl MeanPressure {
             Some(p) => Ok(Some(MeanPressure::new(p, n.trim().parse::<i32>()?))),
             None => Ok(None),
         }
+    }
+}
+
+impl serde::ser::Serialize for MeanPressure {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut s = s.serialize_tuple(2)?;
+        s.serialize_element(&self.p)?;
+        s.serialize_element(&self.n)?;
+        s.end()
     }
 }
 
@@ -396,6 +541,15 @@ impl Temperature {
             "9999.9" => Ok(None),
             s => Ok(Some(Temperature::from_fahrenheit(s.parse::<f64>()?))),
         }
+    }
+}
+
+impl serde::ser::Serialize for Temperature {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        s.serialize_f64(self.in_fahrenheit())
     }
 }
 
@@ -435,6 +589,18 @@ impl MeanTemperature {
     }
 }
 
+impl serde::ser::Serialize for MeanTemperature {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut s = s.serialize_tuple(2)?;
+        s.serialize_element(&self.t)?;
+        s.serialize_element(&self.n)?;
+        s.end()
+    }
+}
+
 #[derive(Debug)]
 pub struct Elevation {
     m: f64,
@@ -454,6 +620,15 @@ impl Elevation {
             "" => Ok(None),
             m => Ok(Some(Self::new(m.parse::<f64>()?))),
         }
+    }
+}
+
+impl serde::ser::Serialize for Elevation {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        s.serialize_f64(self.m)
     }
 }
 
@@ -529,6 +704,18 @@ impl std::str::FromStr for Location {
             lat: lat_v,
             lng: lng_v,
         })
+    }
+}
+
+impl serde::ser::Serialize for Location {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut s = s.serialize_tuple(2)?;
+        s.serialize_element(&self.lat)?;
+        s.serialize_element(&self.lng)?;
+        s.end()
     }
 }
 

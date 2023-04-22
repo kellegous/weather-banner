@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 pub mod gsod;
+pub mod list_stations;
 pub mod render;
 
 #[derive(Debug)]
