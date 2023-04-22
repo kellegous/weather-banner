@@ -53,6 +53,22 @@ impl Station {
     pub fn id(&self) -> &str {
         &self.id
     }
+
+    pub fn location(&self) -> Option<&Location> {
+        self.loc.as_ref()
+    }
+
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    pub fn elevation(&self) -> Option<&Elevation> {
+        self.elevation.as_ref()
+    }
+
+    pub fn days(&self) -> &[Day] {
+        &self.days
+    }
 }
 
 fn from_record(rec: &StringRecord, ix: usize) -> Result<&str, Box<dyn Error>> {
@@ -124,6 +140,22 @@ impl Day {
             precipitation,
             snow_depth,
         })
+    }
+
+    pub fn date(&self) -> chrono::NaiveDate {
+        self.day
+    }
+
+    pub fn max_temperature(&self) -> Option<&TemperatureExtremity> {
+        self.max_temperature.as_ref()
+    }
+
+    pub fn min_temperature(&self) -> Option<&TemperatureExtremity> {
+        self.min_temperature.as_ref()
+    }
+
+    pub fn mean_temperature(&self) -> Option<&MeanTemperature> {
+        self.mean_temperature.as_ref()
     }
 }
 
