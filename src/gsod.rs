@@ -597,11 +597,11 @@ impl MeanTemperature {
     }
 
     pub fn in_fahrenheit(&self) -> f64 {
-        self.t.in_fahrenheit() / self.n as f64
+        self.t.in_fahrenheit()
     }
 
     pub fn in_celsius(&self) -> f64 {
-        self.t.in_celsius() / self.n as f64
+        self.t.in_celsius()
     }
 
     pub fn samples(&self) -> i32 {
