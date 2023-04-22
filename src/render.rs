@@ -95,7 +95,7 @@ fn render(
     station: &Station,
     opts: &Options,
 ) -> Result<(), Box<dyn Error>> {
-    Color::from_u32(0x3b3938).set(&ctx);
+    Color::from_u32(0x3b3938).set(ctx);
     ctx.rectangle(0.0, 0.0, width, height);
     ctx.fill()?;
 
@@ -294,7 +294,7 @@ fn render_temperature(
     // let's draw the months
     ctx.save()?;
     render_months(
-        &ctx,
+        ctx,
         year,
         &Range::new(rrange.min() - 40.0, rrange.min() - 5.0),
     )?;
@@ -302,8 +302,8 @@ fn render_temperature(
 
     // let's draw the scales
     ctx.save()?;
-    let scale = Scale::from_range(&range, 5.0);
-    render_scales(&ctx, &scale, &range, &rrange, "°F", Direction::Left)?;
+    let scale = Scale::from_range(range, 5.0);
+    render_scales(ctx, &scale, range, rrange, "°F", Direction::Left)?;
     ctx.restore()?;
 
     // temperature range
@@ -312,7 +312,7 @@ fn render_temperature(
         ctx,
         &min_temps,
         &max_temps,
-        &rrange,
+        rrange,
         Some(&Color::from_u32_with_alpha(0x6eb078, 0.1)),
         Some(&Color::from_u32(0x6eb078)),
         opts.smooth,
@@ -332,7 +332,7 @@ fn render_temperature(
     ctx.save()?;
     render_center_text(
         ctx,
-        &vec![
+        &[
             (String::from("MAX"), format!("{:.1}°F", range.max())),
             (String::from("AVG"), format!("{:.1}°F", avg_mean_temp)),
             (String::from("MIN"), format!("{:.1}°F", range.min())),
@@ -477,7 +477,7 @@ fn render_scales(
     // let y = -rrange.project(trange.normalize(*steps.first().unwrap() as f64)) + 10.0;
     let y = -rrange.project(trange.normalize(*scale.steps().first().unwrap())) + 10.0;
 
-    ctx.set_dash(&vec![1.0, 4.0], 0.0);
+    ctx.set_dash(&[1.0, 4.0], 0.0);
     Color::from_u32_with_alpha(0xffffff, 0.6).set(ctx);
     ctx.select_font_face("HelveticaNeue", FontSlant::Normal, FontWeight::Normal);
     ctx.set_font_size(10.0);
@@ -585,8 +585,8 @@ pub fn render_radial_range(
         let i = n as isize - i as isize - 1;
         let ta = i as f64 * dt + t0;
         let tb = i as f64 * dt - dt + t0;
-        let ra = rrange.project(min.get_normalized(i as isize));
-        let rb = rrange.project(min.get_normalized(i as isize - 1));
+        let ra = rrange.project(min.get_normalized(i));
+        let rb = rrange.project(min.get_normalized(i - 1));
         let xa = ra * ta.cos();
         let ya = ra * ta.sin();
         let xb = rb * tb.cos();
