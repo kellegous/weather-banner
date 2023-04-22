@@ -157,6 +157,18 @@ impl Day {
     pub fn mean_temperature(&self) -> Option<&MeanTemperature> {
         self.mean_temperature.as_ref()
     }
+
+    pub fn mean_wind(&self) -> Option<&MeanWindSpeed> {
+        self.mean_wind.as_ref()
+    }
+
+    pub fn max_sustained_wind(&self) -> Option<&WindSpeed> {
+        self.max_sustained_wind.as_ref()
+    }
+
+    pub fn precipitation(&self) -> Option<&Precipitation> {
+        self.precipitation.as_ref()
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

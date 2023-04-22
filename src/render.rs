@@ -1,4 +1,6 @@
-use super::{gsod, gsod::Station, time, Color, Data, Direction, Font, Range, Scale, Series, TAU};
+use super::{
+    gsod, gsod::Station, time, Color, Data, Direction, Font, Range, Scale, Series, Unit, TAU,
+};
 use cairo::{Context, FontSlant, FontWeight, Format, ImageSurface};
 use chrono::prelude::*;
 use flate2::read::GzDecoder;
@@ -148,13 +150,13 @@ fn render(
     ctx.save()?;
     ctx.translate(cx, header_height + body_height / 2.0);
     render_title(ctx, "WIND", 0.0, -rrange.max() - 10.0)?;
-    //render_wind(ctx, year, station, &rrange, opts)?;
+    render_wind(ctx, year, station, &rrange, opts)?;
     ctx.restore()?;
 
     ctx.save()?;
     ctx.translate(rx, header_height + body_height / 2.0);
     render_title(ctx, "PRECIPITATION", 0.0, -rrange.max() - 10.0)?;
-    // render_percipitation(ctx, year, station, &rrange, opts)?;
+    render_precipitation(ctx, year, station, &rrange, opts)?;
     ctx.restore()?;
 
     Ok(())
@@ -667,6 +669,183 @@ pub fn render_radial_series(
 
     color.set(ctx);
     ctx.stroke()?;
+
+    Ok(())
+}
+
+fn render_wind(
+    ctx: &Context,
+    year: time::Year,
+    station: &gsod::Station,
+    rrange: &Range,
+    opts: &Options,
+) -> Result<(), Box<dyn Error>> {
+    let mean_wind = Series::for_each_day(year, station.days().iter(), |day| {
+        day.mean_wind().map(|s| s.in_knots())
+    });
+
+    let max_sustained_wind = Series::for_each_day(year, station.days().iter(), |day| {
+        day.max_sustained_wind().map(|s| s.in_knots())
+    });
+
+    let range = Range::intersect(mean_wind.range(), max_sustained_wind.range());
+
+    let mean_wind = mean_wind.with_range(&range);
+    let max_sustained_wind = max_sustained_wind.with_range(&range);
+
+    let avg_mean_wind =
+        mean_wind.values().iter().fold(0.0, |sum, val| sum + val) / mean_wind.values().len() as f64;
+
+    let mean_wind = if opts.downsample_by > 1 {
+        mean_wind.downsample_by(opts.downsample_by as usize, |vals| {
+            vals.iter().fold(0.0, |sum, val| sum + val) / vals.len() as f64
+        })
+    } else {
+        mean_wind
+    };
+
+    let max_sustained_wind = if opts.downsample_by > 1 {
+        max_sustained_wind.downsample_by(opts.downsample_by as usize, |vals| {
+            vals.iter().fold(f64::MIN, |max, val| max.max(*val))
+        })
+    } else {
+        max_sustained_wind
+    };
+
+    ctx.save()?;
+    render_months(
+        ctx,
+        year,
+        &Range::new(rrange.min() - 40.0, rrange.min() - 5.0),
+    )?;
+    ctx.restore()?;
+
+    ctx.save()?;
+    let scale = Scale::from_range(&range, 5.0);
+    render_scales(ctx, &scale, &range, rrange, " kts", Direction::Left)?;
+    ctx.restore()?;
+
+    ctx.save()?;
+    render_radial_range(
+        ctx,
+        &mean_wind,
+        &max_sustained_wind,
+        rrange,
+        Some(&Color::from_u32_with_alpha(0x9f83c3, 0.1)),
+        Some(&Color::from_u32(0x9f83c3)),
+        opts.smooth,
+    )?;
+    ctx.restore()?;
+
+    ctx.save()?;
+    render_center_text(
+        ctx,
+        &[
+            (String::from("MAX"), format!("{:.1} kts", range.max())),
+            (String::from("AVG"), format!("{:.1} kts", avg_mean_wind)),
+        ],
+        &Font::new(
+            "HelveticaNeue-Medium",
+            FontSlant::Normal,
+            FontWeight::Bold,
+            11.0,
+        ),
+        &Font::new(
+            "HelveticaNeue-Thin",
+            FontSlant::Normal,
+            FontWeight::Normal,
+            32.0,
+        ),
+        &Color::from_u32_with_alpha(0xffffff, 0.6),
+        opts,
+    )?;
+    ctx.restore()?;
+
+    Ok(())
+}
+
+fn render_precipitation(
+    ctx: &Context,
+    year: time::Year,
+    station: &gsod::Station,
+    rrange: &Range,
+    opts: &Options,
+) -> Result<(), Box<dyn Error>> {
+    let percipitation = Series::for_each_day(year, station.days().iter(), |day| {
+        match day.precipitation() {
+            Some(p) => Some(p.in_inches()),
+            None => Some(0.0),
+        }
+    });
+
+    let num_days = percipitation
+        .values()
+        .iter()
+        .fold(0, |sum, val| if *val > 0.0 { sum + 1 } else { sum });
+
+    let total = percipitation.values().iter().sum::<f64>();
+
+    ctx.save()?;
+    render_months(
+        ctx,
+        year,
+        &Range::new(rrange.min() - 40.0, rrange.min() - 5.0),
+    )?;
+    ctx.restore()?;
+
+    let scale = Scale::from_range(percipitation.range(), 4.0);
+
+    ctx.save()?;
+    render_scales(
+        ctx,
+        &scale,
+        percipitation.range(),
+        rrange,
+        " in",
+        Direction::Left,
+    )?;
+    ctx.restore()?;
+
+    let n = percipitation.values().len();
+    let dt = TAU / n as f64;
+    let t0 = -TAU / 4.0;
+
+    ctx.save()?;
+    let ra = rrange.project(Unit::zero());
+    Color::from_u32(0x2fcbcc).set(ctx);
+    ctx.new_path();
+    for i in 0..n {
+        let t = i as f64 * dt + t0;
+        let rb = rrange.project(percipitation.get_normalized(i as isize));
+        ctx.move_to(ra * t.cos(), ra * t.sin());
+        ctx.line_to(rb * t.cos(), rb * t.sin());
+    }
+    ctx.stroke()?;
+    ctx.restore()?;
+
+    ctx.save()?;
+    render_center_text(
+        ctx,
+        &[
+            (String::from("DAYS"), format!("{}", num_days)),
+            (String::from("TOTAL"), format!("{:.1} in", total)),
+        ],
+        &Font::new(
+            "HelveticaNeue-Medium",
+            FontSlant::Normal,
+            FontWeight::Bold,
+            11.0,
+        ),
+        &Font::new(
+            "HelveticaNeue-Thin",
+            FontSlant::Normal,
+            FontWeight::Normal,
+            32.0,
+        ),
+        &Color::from_u32_with_alpha(0xffffff, 0.6),
+        opts,
+    )?;
+    ctx.restore()?;
 
     Ok(())
 }
